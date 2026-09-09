@@ -1,0 +1,37 @@
+# Configuración del puente toDus-Matrix
+
+# Homeserver de Matrix
+homeserver:
+  address: "http://localhost:8008"
+  domain: "localhost"
+
+# Appservice configuration
+appservice:
+  address: "http://localhost:29318"
+  token: "tu_appservice_token_aqui"
+  bot_username: "todusbot"
+  bot_password: ""
+
+# Configuración de toDus
+todus:
+  proxy: null  # Opcional: "http://proxy:port"
+  verify_ssl: false
+
+# Configuración de PostgreSQL (para guardar sesiones)
+database:
+  host: "localhost"
+  port: 5432
+  name: "todus_bridge"
+  user: "todus"
+  password: "tu_password_aqui"
+
+# Opciones del bridge
+bridge:
+  default_room_type: "dm"
+  encryption_default: false
+  relay_mode_enabled: false
+
+# Logging
+logging:
+  level: INFO
+  format: "%(asctime)s [%(levelname)s] %(name)s: %(message)s"

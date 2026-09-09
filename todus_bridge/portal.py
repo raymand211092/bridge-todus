@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from mautrix.appservice import IntentAPI
 from mautrix.bridge import BasePortal
@@ -25,9 +25,11 @@ from mautrix.types import (
 )
 from mautrix.util.simple_lock import SimpleLock
 
-from .bridge import ToDusBridge
 from .user import User
 from .puppet import Puppet
+
+if TYPE_CHECKING:
+    from .bridge import ToDusBridge
 
 log = logging.getLogger("todus_bridge.portal")
 

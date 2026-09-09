@@ -12,6 +12,7 @@ from .user import User
 from .puppet import Puppet
 from .portal import Portal
 from .matrix_handler import MatrixHandler
+from .version import __version__, version, linkified_version
 
 __version__ = "0.1.0"
 __all__ = [
@@ -21,4 +22,7 @@ __all__ = [
     "Puppet",
     "Portal",
     "MatrixHandler",
+    "__version__",
+    "version",
+    "linkified_version",
 ]

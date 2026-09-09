@@ -4,25 +4,14 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
-*.py~
-*.py.class
-*.py.backup
-*.swp
-*.swo
 .Python
-*.so
-*.egg-info/
-.eggs/
-.venv/
-venv/
 env/
-.pytest_cache/
-.mypy_cache/
-.coverage
-coverage/
-htmlcov/
-.nox/
-.tox/
+venv/
+.venv/
+.ENV
+.venv.bak/
+pip-log.txt
+pip-delete-this-directory.txt
 
 # Distribution / packaging
 .Python
@@ -42,23 +31,29 @@ wheels/
 .installed.cfg
 *.egg
 
-# Environment
-.env
-.env.local
-.env.*
-.env~*
-.venv
-venv/
-ENV/
+# Testing
+.coverage
+coverage/
+htmlcov/
+.nosetests
+.junit.xml
 
 # IDE
 .vscode/
 .idea/
 *.swp
 *.swo
-*~
+*.tmp
+
+# Environment
+.env
+.env.local
+*.env.*
 
 # OS
 .DS_Store
 Thumbs.db
+
+# Logs
+*.log
 ```

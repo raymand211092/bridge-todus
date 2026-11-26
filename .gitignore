@@ -1,0 +1,21 @@
+# Configs that contain secrets - never commit these
+config.yaml
+registration.yaml
+
+# Runtime data
+*.db
+*.db-shm
+*.db-wal
+profiles.json
+logs/
+venv/
+
+# Build artifacts
+bridge-todus
+bridge-todus.bak*
+
+# Backups and scratch files
+backups/
+*.bak*
+*.new
+config.*.yaml.bak

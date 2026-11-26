@@ -72,6 +72,20 @@ func (nc *MyNetworkClient) markConnected(ctx context.Context) {
 	// Cargar automaticamente los portales de Matrix para todos los grupos y
 	// canales de la cuenta. En background para no bloquear el polling.
 	go nc.AutoLoadRemotes(ctx)
+	// Pedir la cola offline: al reconectar la sesión XMPP del sidecar, el
+	// servidor de ToDus reentrega los mensajes recibidos mientras el puente
+	// estuvo caído (<todus_offline>) y llegan por el /poll normal.
+	// Es no bloqueante; si falla (p. ej. sidecar aun reiniciando), el
+	// reintento de login lo volverá a llamar al reconectar.
+	go func() {
+		resyncCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if err := nc.todus.Resync(resyncCtx); err != nil {
+			nc.log.Warn().Err(err).Msg("Resync de cola offline falló (se seguirá intentando con el polling)")
+			return
+		}
+		nc.log.Info().Msg("Cola offline de ToDus resincronizada (sesión XMPP reiniciada)")
+	}()
 }
 
 // retryLoginUntilConnected reintenta restaurar la sesión del sidecar con

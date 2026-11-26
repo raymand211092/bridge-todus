@@ -78,6 +78,7 @@ sudo systemctl status todus-sidecar
 | `POST /login` | Login con código (o token) y guarda la sesión |
 | `POST /logout` | Cierra la sesión de un teléfono |
 | `POST /poll` | Entrega eventos pendientes de la cola (mensajes, acuses, presencia) |
+| `POST /resync` | Fuerza la reconexión XMPP de un teléfono para traer la cola offline del servidor |
 | `POST /send_message` | Envía un mensaje directo (espera el acuse del servidor) |
 | `POST /send_group_message` | Envía un mensaje a un grupo |
 | `POST /send_channel_message` | Envía un mensaje a un canal |
@@ -102,3 +103,9 @@ sudo systemctl status todus-sidecar
 - El puente y el sidecar deben poder verse entre sí: si corres ambos en la misma
   máquina, `127.0.0.1` funciona; si el sidecar está en otra máquina, expón su
   puerto solo por una red de confianza (el sidecar no tiene TLS).
+- **Mensajes offline:** el servidor de ToDus no implementa MAM (historial remoto),
+  pero reentrega la cola de mensajes no entregados al reconectar la sesión y
+  anunciar presencia. El puente llama a `POST /resync` al arrancar (y a mano con
+  `!todus resync`) para pedir esa cola: los mensajes recibidos mientras el puente
+  estuvo caído llegan al inbox con `offline_ts` y el puente les asigna el timestamp
+  original.

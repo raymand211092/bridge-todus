@@ -90,8 +90,15 @@ _watchdogs: Dict[str, threading.Event] = {}
 _group_presence_threads: Dict[str, threading.Thread] = {}
 _group_presence_state: Dict[str, Any] = {}
 _WATCHDOG_INTERVAL = 60.0
-_WATCHDOG_IDLE_LIMIT = 240.0
-_WATCHDOG_PING_TIMEOUT = 15.0
+# 10 min sin tráfico es normal en un número tranquilo (el puente privado, p. ej.)
+# que no recibe mensajes a diario. Antes (240s) el watchdog reconectaba la
+# sesión XMPP cada ~6 minutos: cada reconexión tumba la sesión y obliga a
+# re-unirse a los grupos, y durante esos segundos los mensajes entrantes se
+# los lleva la app del móvil en lugar del puente.
+_WATCHDOG_IDLE_LIMIT = 600.0
+_WATCHDOG_PING_TIMEOUT = 8.0
+# Cuántas sondas fallidas seguidas hacen falta antes de forzar la reconexión.
+_WATCHDOG_MAX_FAILS = 3
 _iq_last_at: Dict[str, float] = {}
 _receipt_limit = 500
 # Un intento por mensaje: el servidor de ToDus se degrada si lo martillamos.
@@ -456,24 +463,23 @@ def _new_queue_client(phone: str, long_token: str) -> ToDusClientWithQueue:
 
 
 def _ping_session(phone: str, timeout: float = _WATCHDOG_PING_TIMEOUT) -> bool:
-    """Manda un XMPP ping y espera cualquier respuesta de la sesión."""
-    entry = _state.get(phone) or {}
-    client = entry.get("client")
-    if client is None:
-        return False
-    mid = uuid.uuid4().hex
-    iq_xml = f"<iq type='get' i='{mid}'><ping xmlns='urn:xmpp:ping'/></iq>"
-    waiter: Dict[str, Any] = {"event": threading.Event(), "stanza": None}
-    key = f"{phone}:{mid}"
-    _iq_waiters[key] = waiter
+    """Sonda de liveness 'real' de la sesión XMPP.
+
+    El servidor de ToDus NO contesta ``urn:xmpp:ping`` (los pings antiguos
+    siempre fallaban y el watchdog reconectaba sesiones perfectamente sanas).
+    Esta sonda usa un IQ de protocolo (listado de grupos) que el servidor
+    SÍ contesta, con el mismo espaciado/serialización que los demás IQs.
+    """
     try:
-        client.send_stanza(iq_xml)
-        return bool(waiter["event"].wait(timeout))
+        resp = _send_iq_and_wait(
+            phone,
+            todus_stanza.group_my_groups_iq(index=0, limit=5),
+            timeout=timeout,
+        )
     except Exception as e:
-        log.debug("[%s] watchdog: ping falló: %s", phone, e)
+        log.debug("[%s] watchdog: sonda IQ falló: %s", phone, e)
         return False
-    finally:
-        _iq_waiters.pop(key, None)
+    return bool(resp and resp.get("raw"))
 
 
 def _force_reconnect(phone: str) -> None:
@@ -534,6 +540,7 @@ def _start_watchdog(phone: str) -> None:
 
     def run():
         _last_inbound.setdefault(phone, time.time())
+        fails = 0
         while not ev.is_set():
             ev.wait(_WATCHDOG_INTERVAL)
             if ev.is_set():
@@ -543,16 +550,26 @@ def _start_watchdog(phone: str) -> None:
             if se is None or se.is_set():
                 break
             idle = time.time() - _last_inbound.get(phone, time.time())
+            # Tráfico reciente => sesión viva, ni siquiera sondear.
             if idle < _WATCHDOG_IDLE_LIMIT:
+                fails = 0
                 continue
             if _ping_session(phone):
+                fails = 0
                 _last_inbound[phone] = time.time()
                 log.info("[%s] watchdog: sesión OK tras %.0fs sin tráfico", phone, idle)
                 continue
-            log.warning("[%s] watchdog: %.0fs sin respuesta; forzando reconexión XMPP", phone, idle)
-            _force_reconnect(phone)
-            # Dar margen para que el listener reconecte antes de volver a probar.
-            _last_inbound[phone] = time.time()
+            # Una sonda fallida puede ser un servidor atareado; solo forzamos
+            # reconexión tras varias fallidas seguidas en un periodo quieto.
+            fails += 1
+            if fails >= _WATCHDOG_MAX_FAILS:
+                log.warning(
+                    "[%s] watchdog: %d sondas fallidas tras %.0fs sin tráfico; "
+                    "forzando reconexión XMPP", phone, fails, idle)
+                _force_reconnect(phone)
+                fails = 0
+                # Dar margen para que el listener reconecte antes de volver a probar.
+                _last_inbound[phone] = time.time()
 
     threading.Thread(target=run, name=f"todus-watchdog-{phone}", daemon=True).start()
     log.info("[%s] watchdog iniciado", phone)
@@ -1217,6 +1234,27 @@ async def poll(body: PollBody):
         # El puente ya tiene los mensajes: retirar las copias persistidas.
         _clear_persisted_inbox(phone)
     return {"messages": msgs, "receipts": recs}
+
+
+@app.post("/resync")
+def resync(body: PollBody):
+    """Fuerza a la sesión XMPP de este teléfono a reconectarse.
+
+    Al reconectar (y anunciar presencia), el servidor de ToDus reentrega la
+    cola offline (<todus_offline>): mensajes recibidos mientras el puente
+    estuvo caído entran al inbox y el puente los encola en su próximo poll.
+
+    Uso: cuando arranca el puente (Connect), o manualmente con un comando
+    del bridge, para "cargar los mensajes offline ahora".
+    """
+    phone = body.phone.strip()
+    entry = _state.get(phone)
+    if not entry or not entry.get("client"):
+        log.warning("[%s] resync: sesión no activa", phone)
+        raise HTTPException(404, "sesión no activa")
+    log.info("[%s] resync: forzando reconexión XMPP para traer cola offline", phone)
+    _force_reconnect(phone)
+    return {"status": "ok", "phone": phone}
 
 
 @app.post("/contacts")

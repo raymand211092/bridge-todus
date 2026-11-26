@@ -150,6 +150,7 @@ Prefijo por defecto: `!todus` (configurable con `bridge.command_prefix`).
 | `!todus relay` | — | Muestra el estado del relay de la sala. |
 | `!todus relay on` / `!todus relay off` | — | Activa/desactiva el relay en la sala. |
 | `!todus relay <teléfono> <mensaje>` | — | Envía un mensaje directo de ToDus desde el puente. |
+| `!todus resync` | `offline`, `sincronizar` | Vuelve a conectar la sesión de ToDus para traer los mensajes offline. |
 
 ## Estructura del proyecto
 

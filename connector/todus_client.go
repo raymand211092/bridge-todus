@@ -135,6 +135,30 @@ func (c *TodusHTTPClient) SendReadReceipt(ctx context.Context, to, msgID string)
 	return nil
 }
 
+// Resync pide al sidecar que reconecte la sesión XMPP de este teléfono.
+// Al reconectar y anunciar presencia, el servidor de ToDus reentrega la
+// cola offline (<todus_offline>): mensajes recibidos mientras el puente
+// estaba caído entran al inbox y el próximo /poll los encola a Matrix.
+// Es no bloqueante para el bridge: si falla, el polling sigue como siempre.
+func (c *TodusHTTPClient) Resync(ctx context.Context) error {
+	payload := map[string]string{"phone": c.phone}
+	raw, _ := json.Marshal(payload)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/resync", bytes.NewReader(raw))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return fmt.Errorf("resync: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("resync: HTTP %d", resp.StatusCode)
+	}
+	return nil
+}
+
 // TodusReceipt es un acuse de entrega/lectura (dd/rd) o un ack del servidor.
 type TodusReceipt struct {
 	ID      string  `json:"id"`

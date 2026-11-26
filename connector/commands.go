@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/commands"
@@ -67,6 +68,15 @@ func (c *MyConnector) registerCommands() {
 				Section:     commands.HelpSectionChats,
 				Description: "Activa el relay de la sala o envía un mensaje directo por ToDus",
 				Args:        "[on|off|<teléfono> <mensaje>]",
+			},
+		},
+		&commands.FullHandler{
+			Func:    fnTodusResync,
+			Name:    "resync",
+			Aliases: []string{"offline", "sincronizar"},
+			Help: commands.HelpMeta{
+				Section:     commands.HelpSectionChats,
+				Description: "Vuelve a conectar la sesión de ToDus para traer los mensajes offline",
 			},
 		},
 	)
@@ -257,6 +267,22 @@ func fnTodusPresence(ce *commands.Event) {
 		b.WriteString("\n")
 	}
 	ce.Reply(strings.TrimRight(b.String(), "\n"))
+}
+
+func fnTodusResync(ce *commands.Event) {
+	nc, _, err := todusClientForEvent(ce)
+	if err != nil {
+		ce.Reply("%s", err)
+		return
+	}
+	ce.Reply("Reconectando la sesión de ToDus para traer los mensajes offline…")
+	ctx, cancel := context.WithTimeout(ce.Ctx, 30*time.Second)
+	defer cancel()
+	if err := nc.todus.Resync(ctx); err != nil {
+		ce.Reply("Falló la resincronización: %v", err)
+		return
+	}
+	ce.Reply("Sesión de ToDus reiniciada. Los mensajes offline llegarán en unos segundos.")
 }
 
 func fnTodusGroups(ce *commands.Event) {

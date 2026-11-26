@@ -9,6 +9,12 @@ registration.yaml
 profiles.json
 logs/
 venv/
+.venv/
+tokens/
+queues/
+inbox/
+__pycache__/
+*.pyc
 
 # Build artifacts
 bridge-todus

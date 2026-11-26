@@ -9,15 +9,23 @@ Construido con [mautrix-go](https://github.com/mautrix/go) (framework `bridgev2`
 
 ## Cómo funciona
 
-El puente no habla directamente con los servidores de ToDus. Se conecta a un **sidecar** local
-(un servicio auxiliar que sí implementa el protocolo de ToDus) y traduce entre Matrix y ese sidecar
-a través de una API HTTP local.
+El puente **no** habla directamente con los servidores de ToDus. Se necesitan **dos piezas**:
 
-- El sidecar debe estar corriendo y accesible en `http://127.0.0.1:8765`
-  (configurable con `network.sidecar_url` en `config.yaml`).
-- Para iniciar sesión se usa el **número de teléfono** de ToDus y un **código SMS**:
-  introduces tu número en el chat con el bot, el puente pide el código al sidecar,
-  y lo introduces cuando te lo pida.
+```
+cliente Matrix  <->  bridge-todus (Go, bridgev2)  <->  sidecar (FastAPI/Python)  <->  servidores de ToDus
+```
+
+1. **bridge-todus** (este repo, lenguaje Go): el puente de Matrix. Traduce eventos Matrix ↔ ToDus.
+2. **sidecar** (carpeta [`sidecar/`](sidecar/README.md) de este repo, lenguaje Python): habla con
+   los servidores de ToDus usando el paquete [`todus-sdk`](https://pypi.org/project/todus-sdk/).
+   Expone una API HTTP local que el puente usa para loguearse y enviar/recibir mensajes.
+
+El sidecar debe estar corriendo y accesible en `http://127.0.0.1:8765`
+(configurable con `network.sidecar_url` en `config.yaml`).
+
+Para iniciar sesión se usa el **número de teléfono** de ToDus y un **código SMS**:
+introduces tu número en el chat con el bot, el sidecar pide el código al servidor de ToDus,
+y lo introduces cuando el bot te lo pida.
 
 ## Características
 
@@ -30,9 +38,28 @@ a través de una API HTTP local.
 ## Requisitos
 
 - Go 1.26+ (ver `go.mod`).
+- Python 3.10+ (para el sidecar).
 - Un homeserver de Matrix que soporte appservices (Synapse recomendado).
-- El sidecar de ToDus corriendo en la misma máquina que el puente.
 - (Opcional) libolm para cifrado E2EE: en Debian/Ubuntu `apt install libolm-dev`, en macOS `brew install libolm`.
+
+## Instalación del sidecar (obligatorio)
+
+El sidecar es el componente que conecta el puente con ToDus. **Sin él, el puente no funciona.**
+
+```bash
+cd sidecar
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+
+TODUS_QUEUE_DIR=/var/lib/todus-sidecar/queues \
+TODUS_TOKEN_DIR=/var/lib/todus-sidecar/tokens \
+TODUS_INBOX_DIR=/var/lib/todus-sidecar/inbox \
+.venv/bin/python main.py
+```
+
+El sidecar escucha en `127.0.0.1:8765` por defecto (variable `TODUS_PORT`).
+La documentación completa (variables de entorno, systemd, endpoints) está en
+[`sidecar/README.md`](sidecar/README.md).
 
 ## Compilación
 
@@ -69,7 +96,7 @@ Ajusta al menos estos valores:
 | `appservice` | `bot.username` | El nombre de usuario del bot (p. ej. `todusbot`). |
 | `appservice` | `port` / `hostname` | Dónde escucha el appservice para recibir eventos del homeserver. |
 | `database` | `uri` | Ruta a una base de datos SQLite o URI de Postgres. |
-| `network` | `sidecar_url` | Dirección del sidecar de ToDus (por defecto `http://127.0.0.1:8765`). |
+| `network` | `sidecar_url` | Dirección del sidecar (por defecto `http://127.0.0.1:8765`). |
 | `permissions` | | Quién puede usar el puente (por defecto solo el admin). |
 
 Cuando genere el `registration.yaml` en el paso siguiente, copia los valores de
@@ -128,6 +155,10 @@ Prefijo por defecto: `!todus` (configurable con `bridge.command_prefix`).
 
 ```
 main.go                  # Punto de entrada: configura, loguea y arranca el puente.
+sidecar/                 # Sidecar FastAPI (Python) que habla con los servidores de ToDus.
+  main.py                #   API HTTP: /request_code, /login, /send_message, /poll, ...
+  requirements.txt       #   fastapi, uvicorn, todus-sdk
+  README.md              #   Documentación del sidecar.
 connector/
   my_connector.go        # Implementación principal de NetworkConnector (bridgev2).
   login.go               # Login por teléfono + código SMS vía sidecar.
@@ -151,9 +182,12 @@ gen-config.sh            # Helper para generar config.yaml con bbctl (uso intern
 
 - `config.yaml` y `registration.yaml` contienen credenciales. Ambos están en `.gitignore`:
   **no los subas nunca a un repositorio público**.
+- Los directorios de datos del sidecar (`tokens/`, `queues/`, `inbox/`) contienen tokens de
+  sesión de los usuarios conectados. Están en `.gitignore` — mantenlos fuera de git.
 - Genera tu propio `registration.yaml`; no reutilices el de otra instalación.
 
 ## Créditos
 
 - [mautrix-go](https://github.com/mautrix/go) y su framework `bridgev2`.
 - Template [matrix-bridge-quickstart](https://github.com/dvcrn/matrix-bridge-quickstart) de [dvcrn](https://github.com/dvcrn).
+- [`todus-sdk`](https://pypi.org/project/todus-sdk/), el SDK de Python usado por el sidecar.

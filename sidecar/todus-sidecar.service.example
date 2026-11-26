@@ -1,0 +1,22 @@
+# Unidad systemd de ejemplo para el sidecar de ToDus.
+# Ajusta las rutas a tu instalación (WorkingDirectory y ExecStart apuntan al
+# checkout del repo; TODUS_*_DIR apuntan a directorios de datos fuera de git).
+[Unit]
+Description=ToDus sidecar (todus-sdk HTTP bridge)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+Environment=PYTHONUNBUFFERED=1
+Environment=TODUS_PORT=8765
+Environment=TODUS_QUEUE_DIR=/var/lib/todus-sidecar/queues
+Environment=TODUS_TOKEN_DIR=/var/lib/todus-sidecar/tokens
+Environment=TODUS_INBOX_DIR=/var/lib/todus-sidecar/inbox
+WorkingDirectory=/opt/bridge-todus/sidecar
+ExecStart=/opt/bridge-todus/sidecar/.venv/bin/python main.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
